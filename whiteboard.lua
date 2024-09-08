@@ -17,10 +17,9 @@ scene_name      = nil
 setting_update  = false
 
 eraser_v4     = obs.vec4()
-color_count   = 6  -- The color at index color_count is reserved for user-defined custom colors.
 color_index   = 1
 -- Preset colors: Yellow, Red, Green, Blue, White, Custom (format is 0xABGR)
-color_array = {0xFF28FFFF, 0xFF0000FF, 0xFF00FF50, 0xFFB7FF28, 0xFFFFFFFF, 0xFF000000}
+color_array = {0xff4d4de8, 0xff4d9de8, 0xff4de5e8, 0xff4de88e, 0xff95e84d, 0xffe8d34d, 0xffe8574d, 0xffe84d9d, 0xffbc4de8}
 size          = 6
 size_max      = 12  -- size_max must be a minimum of 2.
 
@@ -90,14 +89,6 @@ function script_load(settings)
     obs.obs_hotkey_load(hotkey_clear, hotkey_save_array)
     obs.obs_data_array_release(hotkey_save_array)
     
-    hotkey_color = obs.obs_hotkey_register_frontend("whiteboard.colorswap", "Swap Whiteboard Color", colorswap)
-    if hotkey_color == nil then
-        hotkey_color = obs.OBS_INVALID_HOTKEY_ID
-    end
-    local hotkey_save_array2 = obs.obs_data_get_array(settings, "whiteboard.colorswap")
-    obs.obs_hotkey_load(hotkey_color, hotkey_save_array2)
-    obs.obs_data_array_release(hotkey_save_array2)
-    
     hotkey_size = obs.obs_hotkey_register_frontend("whiteboard.sizetoggle", "Toggle Whiteboard Pencil Size", sizetoggle)
     if hotkey_size == nil then
         hotkey_size = obs.OBS_INVALID_HOTKEY_ID
@@ -124,16 +115,10 @@ function script_load(settings)
 end
 
 function script_update(settings)
-    local color_value = obs.obs_data_get_int(settings, "color")
     local size_value = obs.obs_data_get_int(settings, "size")
     local eraser_value = obs.obs_data_get_bool(settings, "eraser")
     
-    color_index = color_value
     size = size_value
-    
-    -- Set custom color in the color array (always last element).
-    color_array[color_count] = obs.obs_data_get_int(settings, "custom_color")
-    obs.obs_data_set_int(settings, "color", color_count)
     
     -- Set setting_update to true in order to trigger an update to the
     -- vertices used to draw our lines. This is deferred to the graphics
@@ -156,10 +141,6 @@ end
 function script_save(settings)
     local hotkey_save_array = obs.obs_hotkey_save(hotkey_clear)
     obs.obs_data_set_array(settings, "whiteboard.clear", hotkey_save_array)
-    obs.obs_data_array_release(hotkey_save_array)
-    
-    hotkey_save_array = obs.obs_hotkey_save(hotkey_color)
-    obs.obs_data_set_array(settings, "whiteboard.colorswap", hotkey_save_array)
     obs.obs_data_array_release(hotkey_save_array)
     
     hotkey_save_array = obs.obs_hotkey_save(hotkey_size)
@@ -229,14 +210,6 @@ source_def.video_tick = function(data, dt)
     obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
 
     obs.obs_leave_graphics()
-
-    if swap_color then
-        color_index = color_index + 1
-        if color_index > color_count then
-            color_index = 1
-        end
-        swap_color = false
-    end
     
     -- The hotkeyed size toggle increases size by increments of 2,
     -- starting from 2. This is due to single pixel increments being
@@ -263,7 +236,9 @@ source_def.video_tick = function(data, dt)
         update_vertices()
         setting_update = false
     end
-        
+
+    update_color()
+
     local mouse_down = winapi.GetAsyncKeyState(winapi.VK_LBUTTON)
     local window = winapi.GetForegroundWindow()
     if mouse_down then
@@ -284,7 +259,7 @@ source_def.video_tick = function(data, dt)
                     return
                 end
 
-                local new_segment = { erase = lines[#lines].erase, points = {
+                local new_segment = { color = color_index, points = {
                     { x = data.prev_mouse_pos.x, y = data.prev_mouse_pos.y },
                     { x = mouse_pos.x, y = mouse_pos.y }
                 }}
@@ -292,7 +267,7 @@ source_def.video_tick = function(data, dt)
                 table.insert(lines[#lines].points, { x = mouse_pos.x, y = mouse_pos.y })
             else
                 if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
-                    table.insert(lines, { erase = eraser, points = {{ x = mouse_pos.x, y = mouse_pos.y }}})
+                    table.insert(lines, { color = color_index, points = {{ x = mouse_pos.x, y = mouse_pos.y }}})
                     drawing = true
                 end
             end
@@ -312,6 +287,15 @@ source_def.video_tick = function(data, dt)
         if data.prev_mouse_pos then
             data.prev_mouse_pos = nil
             drawing = false
+        end
+    end
+end
+
+function update_color()
+    for i=1,#color_array do
+        local key_down = winapi.GetAsyncKeyState(0x30 + i)
+        if key_down then
+            color_index = i
         end
     end
 end
@@ -374,14 +358,14 @@ function draw_lines(data, lines)
             local color = obs.gs_effect_get_param_by_name(solid, "color")
             local tech  = obs.gs_effect_get_technique(solid, "Solid")
 
-            if line.erase then
-                obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-                obs.gs_effect_set_vec4(color, eraser_v4)
-            else
+            -- if line.erase then
+            --     obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+            --     obs.gs_effect_set_vec4(color, eraser_v4)
+            -- else
                 local color_v4 = obs.vec4()
-                obs.vec4_from_rgba(color_v4, color_array[color_index])
+                obs.vec4_from_rgba(color_v4, color_array[line.color])
                 obs.gs_effect_set_vec4(color, color_v4)
-            end
+            -- end
 
             obs.gs_technique_begin(tech)
             obs.gs_technique_begin_pass(tech, 0)
@@ -717,6 +701,8 @@ source_def.video_render = function(data, effect)
         obs.gs_matrix_push()
         obs.gs_matrix_identity()
 
+        obs.gs_blend_function(obs.GS_BLEND_ONE, obs.GS_BLEND_INVSRCALPHA)
+
         while obs.gs_effect_loop(effect, "Draw") do
             obs.obs_source_draw(data.canvas_texture, 0, 0, 0, 0, false);
             obs.obs_source_draw(data.ui_texture, 0, 0, 0, 0, false);
@@ -750,18 +736,9 @@ end
 
 function script_properties()
     local properties = obs.obs_properties_create()    
-    local color_list = obs.obs_properties_add_list(properties, "color", "Color", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_INT)
-    obs.obs_property_list_add_int(color_list, "Yellow", 1)
-    obs.obs_property_list_add_int(color_list, "Red", 2)
-    obs.obs_property_list_add_int(color_list, "Green", 3)
-    obs.obs_property_list_add_int(color_list, "Blue", 4)
-    obs.obs_property_list_add_int(color_list, "White", 5)
-    obs.obs_property_list_add_int(color_list, "Custom", 6)
     
     local size_slider = obs.obs_properties_add_int_slider(properties, "size", "Size", 1, size_max, 1)
-    
-    local color_palette = obs.obs_properties_add_color(properties, "custom_color", "Custom Color")
-    
+
     local eraser_toggle = obs.obs_properties_add_bool(properties, "eraser", "Eraser")
     
     obs.obs_properties_add_button(properties, "clear", "Clear Whiteboard", clear_button)
@@ -775,12 +752,10 @@ function script_properties()
 end
 
 function script_defaults(settings)
-    obs.obs_data_set_default_int(settings, "color", 5)
     obs.obs_data_set_default_int(settings, "size", 6)
     obs.obs_data_set_default_bool(settings, "eraser", false)
-    obs.obs_data_set_default_int(settings, "custom_color", 0xFF000000)
     
-    color_index = 5
+    color_index = 1
     size = 6
     eraser = false
 end
