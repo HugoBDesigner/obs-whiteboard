@@ -232,6 +232,7 @@ BOOL GetWindowRect(HWND hWnd, LPRECT lpRect);
 BOOL GetClientRect(HWND hWnd, LPRECT lpRect);
 HWND SetParent(HWND hWndChild, HWND hWndNewParent);
 HWND GetParent(HWND hWnd);
+BOOL IsWindow(HWND hWnd);
 BOOL IsWindowVisible(HWND hWnd);
 BOOL IsWindowEnabled(HWND hWnd);
 HWND GetActiveWindow();
@@ -282,6 +283,10 @@ function SetParent(hwnd, parent)
 	local prev_parent = checkh(C.SetParent(hwnd, parent))
 	if parent == nil then own(hwnd, DestroyWindow) else disown(hwnd) end
 	return prev_parent
+end
+
+function IsWindow(hwnd)
+	return C.IsWindow(hwnd) ~= 0
 end
 
 function IsWindowVisible(hwnd)

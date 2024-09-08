@@ -21,7 +21,7 @@ color_count   = 6  -- The color at index color_count is reserved for user-define
 color_index   = 1
 -- Preset colors: Yellow, Red, Green, Blue, White, Custom (format is 0xABGR)
 color_array = {0xFF28FFFF, 0xFF0000FF, 0xFF00FF50, 0xFFB7FF28, 0xFFFFFFFF, 0xFF000000}
-size          = 2
+size          = 6
 size_max      = 12  -- size_max must be a minimum of 2.
 
 dot_vert = obs.gs_vertbuffer_t
@@ -29,6 +29,8 @@ line_vert = obs.gs_vertbuffer_t
 
 drawing = false
 lines = {}
+
+target_window = nil
 
 bit = require("bit")
 winapi = require("winapi")
@@ -62,7 +64,7 @@ source_def.create = function(source, settings)
         data.width = video_info.base_width
         data.height = video_info.base_height
 
-        create_whiteboard_texture(data)
+        create_textures(data)
     else
         print "Failed to get video resolution"
     end
@@ -71,8 +73,10 @@ source_def.create = function(source, settings)
 end
 
 source_def.destroy = function(data)
+    data.active = false
     obs.obs_enter_graphics()
-    obs.gs_texture_destroy(data.texture)
+    obs.gs_texture_destroy(data.canvas_texture)
+    obs.gs_texture_destroy(data.ui_texture)
     obs.obs_leave_graphics()
 end
 
@@ -179,10 +183,10 @@ source_def.video_tick = function(data, dt)
     if obs.obs_get_video_info(video_info) and (video_info.base_width ~= data.width or video_info.base_height ~= data.height) then
         data.width = video_info.base_width
         data.height = video_info.base_height
-        create_whiteboard_texture(data)
+        create_textures(data)
     end
 
-    if data.texture == nil then
+    if data.canvas_texture == nil or data.ui_texture == nil then
         return
     end
     
@@ -198,7 +202,7 @@ source_def.video_tick = function(data, dt)
         obs.gs_set_viewport(0, 0, data.width, data.height)
 
         obs.obs_enter_graphics()
-        obs.gs_set_render_target(data.texture, nil)
+        obs.gs_set_render_target(data.canvas_texture, nil)
         obs.gs_clear(obs.GS_CLEAR_COLOR, obs.vec4(), 1.0, 0)
 
         draw_lines(data, lines)
@@ -210,6 +214,21 @@ source_def.video_tick = function(data, dt)
 
         needs_clear = false
     end
+
+    local prev_render_target = obs.gs_get_render_target()
+    local prev_zstencil_target = obs.gs_get_zstencil_target()
+
+    obs.gs_viewport_push()
+    obs.gs_set_viewport(0, 0, data.width, data.height)
+
+    obs.obs_enter_graphics()
+    obs.gs_set_render_target(data.ui_texture, nil)
+    obs.gs_clear(obs.GS_CLEAR_COLOR, obs.vec4(), 1.0, 0)
+
+    obs.gs_viewport_pop()
+    obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
+
+    obs.obs_leave_graphics()
 
     if swap_color then
         color_index = color_index + 1
@@ -246,29 +265,18 @@ source_def.video_tick = function(data, dt)
     end
         
     local mouse_down = winapi.GetAsyncKeyState(winapi.VK_LBUTTON)
+    local window = winapi.GetForegroundWindow()
     if mouse_down then
-        local window = winapi.GetForegroundWindow()
         if is_drawable_window(window) then
-            local mouse_pos = winapi.GetCursorPos()
-            winapi.ScreenToClient(window, mouse_pos)
+            target_window = window
+        else
+            target_window = nil
+        end
+    end
 
-            local window_rect = winapi.GetClientRect(window)
-            
-            local output_aspect = data.width / data.height
-
-            local window_width = window_rect.right - window_rect.left
-            local window_height = window_rect.bottom - window_rect.top
-            local window_aspect = window_width / window_height
-            local offset_x = 0
-            local offset_y = 0
-            if window_aspect >= output_aspect then
-                offset_x = (window_width - window_height * output_aspect) / 2
-            else
-                offset_y = (window_height - window_width / output_aspect) / 2
-            end
-
-            mouse_pos.x = data.width * (mouse_pos.x - offset_x) / (window_width - offset_x*2)
-            mouse_pos.y = data.height * (mouse_pos.y - offset_y) / (window_height - offset_y*2)
+    if mouse_down then
+        if window and window == target_window then
+            local mouse_pos = get_mouse_pos(data, window)
             
             if drawing then
                 effect = obs.obs_get_base_effect(obs.OBS_EFFECT_DEFAULT)
@@ -291,7 +299,16 @@ source_def.video_tick = function(data, dt)
 
             data.prev_mouse_pos = mouse_pos
         end
-    else
+    end
+
+    if window and window == target_window then
+        local mouse_pos = get_mouse_pos(data, window)
+        if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
+            draw_cursor(data, mouse_pos)
+        end
+    end
+
+    if not mouse_down then
         if data.prev_mouse_pos then
             data.prev_mouse_pos = nil
             drawing = false
@@ -301,10 +318,38 @@ end
 
 function is_drawable_window(window)
     window_name = winapi.InternalGetWindowText(window, nil)
+    if not window_name then
+        return false
+    end
 
     return window_match(window_name) and
         (string.find(window_name, "Windowed Projector", 1, true) or
         string.find(window_name, "Fullscreen Projector", 1, true))
+end
+
+function get_mouse_pos(data, window)
+    local mouse_pos = winapi.GetCursorPos()
+    winapi.ScreenToClient(window, mouse_pos)
+
+    local window_rect = winapi.GetClientRect(window)
+    
+    local output_aspect = data.width / data.height
+
+    local window_width = window_rect.right - window_rect.left
+    local window_height = window_rect.bottom - window_rect.top
+    local window_aspect = window_width / window_height
+    local offset_x = 0
+    local offset_y = 0
+    if window_aspect >= output_aspect then
+        offset_x = (window_width - window_height * output_aspect) / 2
+    else
+        offset_y = (window_height - window_width / output_aspect) / 2
+    end
+
+    mouse_pos.x = data.width * (mouse_pos.x - offset_x) / (window_width - offset_x*2)
+    mouse_pos.y = data.height * (mouse_pos.y - offset_y) / (window_height - offset_y*2)
+
+    return mouse_pos
 end
 
 function draw_lines(data, lines)
@@ -313,7 +358,7 @@ function draw_lines(data, lines)
     local prev_render_target = obs.gs_get_render_target()
     local prev_zstencil_target = obs.gs_get_zstencil_target()
 
-    obs.gs_set_render_target(data.texture, nil)
+    obs.gs_set_render_target(data.canvas_texture, nil)
     obs.gs_viewport_push()
     obs.gs_set_viewport(0, 0, data.width, data.height)
     obs.gs_projection_push()
@@ -394,6 +439,67 @@ function draw_lines(data, lines)
             obs.gs_blend_state_pop()
         end
     end
+
+    obs.gs_projection_pop()
+    obs.gs_viewport_pop()
+    obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
+
+    obs.obs_leave_graphics()
+end
+
+function draw_cursor(data, mouse_pos)
+    obs.obs_enter_graphics()
+
+    local prev_render_target = obs.gs_get_render_target()
+    local prev_zstencil_target = obs.gs_get_zstencil_target()
+
+    obs.gs_set_render_target(data.ui_texture, nil)
+    obs.gs_viewport_push()
+    obs.gs_set_viewport(0, 0, data.width, data.height)
+    obs.gs_projection_push()
+    obs.gs_ortho(0, data.width, 0, data.height, 0.0, 1.0)
+
+    obs.gs_blend_state_push()
+    obs.gs_reset_blend_state()
+    
+    -- Set the color being used (or set the eraser).
+    local solid = obs.obs_get_base_effect(obs.OBS_EFFECT_SOLID)
+    local color = obs.gs_effect_get_param_by_name(solid, "color")
+    local tech  = obs.gs_effect_get_technique(solid, "Solid")
+
+    -- if line.erase then
+    --     obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+    --     obs.gs_effect_set_vec4(color, eraser_v4)
+    -- else
+    local color_v4 = obs.vec4()
+    obs.vec4_from_rgba(color_v4, color_array[color_index])
+    obs.gs_effect_set_vec4(color, color_v4)
+    -- end
+
+    obs.gs_technique_begin(tech)
+    obs.gs_technique_begin_pass(tech, 0)
+
+    -- Perform matrix transformations for the dot at the
+    -- start of the line (start cap).
+    obs.gs_matrix_push()
+    obs.gs_matrix_identity()
+    obs.gs_matrix_translate3f(mouse_pos.x, mouse_pos.y, 0)
+
+    obs.gs_matrix_push()
+    obs.gs_matrix_translate3f(-size, -size, 0)
+    
+    -- Draw start of line.
+    obs.gs_load_vertexbuffer(dot_vert)
+    obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
+
+    obs.gs_matrix_pop()
+    obs.gs_matrix_pop()
+
+    -- Done drawing line, restore everything.
+    obs.gs_technique_end_pass(tech)
+    obs.gs_technique_end(tech)
+
+    obs.gs_blend_state_pop()
 
     obs.gs_projection_pop()
     obs.gs_viewport_pop()
@@ -581,15 +687,22 @@ function image_source_load(image, file)
     end
 end
 
-function create_whiteboard_texture(data)
+function create_textures(data)
     obs.obs_enter_graphics()
     
-    if data.texture ~= nil then
-        obs.gs_texture_destroy(data.texture)
+    if data.canvas_texture ~= nil then
+        obs.gs_texture_destroy(data.canvas_texture)
     end
 
-    data.texture = obs.gs_texture_create(data.width, data.height, obs.GS_RGBA, 1, nil, obs.GS_RENDER_TARGET)
-    print("create whiteboard texture " .. data.width .. " " .. data.height)
+    data.canvas_texture = obs.gs_texture_create(data.width, data.height, obs.GS_RGBA, 1, nil, obs.GS_RENDER_TARGET)
+    print("create canvas texture " .. data.width .. " " .. data.height)
+    
+    if data.ui_texture ~= nil then
+        obs.gs_texture_destroy(data.ui_texture)
+    end
+
+    data.ui_texture = obs.gs_texture_create(data.width, data.height, obs.GS_RGBA, 1, nil, obs.GS_RENDER_TARGET)
+    print("create ui texture " .. data.width .. " " .. data.height)
 
     obs.obs_leave_graphics()
 end
@@ -598,14 +711,15 @@ end
 source_def.video_render = function(data, effect)
     effect = obs.obs_get_base_effect(obs.OBS_EFFECT_DEFAULT)
 
-    if effect and data.texture then
+    if effect and data.canvas_texture and data.ui_texture then
         obs.gs_blend_state_push()
         obs.gs_reset_blend_state()
         obs.gs_matrix_push()
         obs.gs_matrix_identity()
 
         while obs.gs_effect_loop(effect, "Draw") do
-            obs.obs_source_draw(data.texture, 0, 0, 0, 0, false);
+            obs.obs_source_draw(data.canvas_texture, 0, 0, 0, 0, false);
+            obs.obs_source_draw(data.ui_texture, 0, 0, 0, 0, false);
         end
 
         obs.gs_matrix_pop()
@@ -662,12 +776,12 @@ end
 
 function script_defaults(settings)
     obs.obs_data_set_default_int(settings, "color", 5)
-    obs.obs_data_set_default_int(settings, "size", 2)
+    obs.obs_data_set_default_int(settings, "size", 6)
     obs.obs_data_set_default_bool(settings, "eraser", false)
     obs.obs_data_set_default_int(settings, "custom_color", 0xFF000000)
     
     color_index = 5
-    size = 2
+    size = 6
     eraser = false
 end
 
