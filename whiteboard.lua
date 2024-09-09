@@ -20,7 +20,7 @@ eraser_v4     = obs.vec4()
 color_index   = 1
 -- Preset colors: Yellow, Red, Green, Blue, White, Custom (format is 0xABGR)
 color_array = {0xff4d4de8, 0xff4d9de8, 0xff4de5e8, 0xff4de88e, 0xff95e84d, 0xffe8d34d, 0xffe8574d, 0xffe84d9d, 0xffbc4de8}
-size          = 6
+size          = 20
 size_max      = 12  -- size_max must be a minimum of 2.
 
 dot_vert = obs.gs_vertbuffer_t
@@ -89,14 +89,6 @@ function script_load(settings)
     obs.obs_hotkey_load(hotkey_clear, hotkey_save_array)
     obs.obs_data_array_release(hotkey_save_array)
     
-    hotkey_size = obs.obs_hotkey_register_frontend("whiteboard.sizetoggle", "Toggle Whiteboard Pencil Size", sizetoggle)
-    if hotkey_size == nil then
-        hotkey_size = obs.OBS_INVALID_HOTKEY_ID
-    end
-    local hotkey_save_array3 = obs.obs_data_get_array(settings, "whiteboard.sizetoggle")
-    obs.obs_hotkey_load(hotkey_size, hotkey_save_array3)
-    obs.obs_data_array_release(hotkey_save_array3)
-    
     hotkey_erase = obs.obs_hotkey_register_frontend("whiteboard.erasertoggle", "Toggle Whiteboard Eraser", erasertoggle)
     if hotkey_erase == nil then
         hotkey_erase = obs.OBS_INVALID_HOTKEY_ID
@@ -115,10 +107,7 @@ function script_load(settings)
 end
 
 function script_update(settings)
-    local size_value = obs.obs_data_get_int(settings, "size")
     local eraser_value = obs.obs_data_get_bool(settings, "eraser")
-    
-    size = size_value
     
     -- Set setting_update to true in order to trigger an update to the
     -- vertices used to draw our lines. This is deferred to the graphics
@@ -210,25 +199,6 @@ source_def.video_tick = function(data, dt)
     obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
 
     obs.obs_leave_graphics()
-    
-    -- The hotkeyed size toggle increases size by increments of 2,
-    -- starting from 2. This is due to single pixel increments being
-    -- generally unnoticeable.
-    if toggle_size then
-        -- If the current size is an even number, increment by 2,
-        -- otherwise increment by 1 to make it even.
-        odd = size % 2
-        if odd == 1 then
-            size = size + 1
-        else
-            size = size + 2
-        end
-        if size > size_max then
-            size = 2
-        end
-        update_vertices()
-        toggle_size = false
-    end
     
     -- If the size of the pencil was changed, we need to update the
     -- vertices used to draw our line.
@@ -392,7 +362,7 @@ function draw_lines(data, lines)
                 
                 -- Draw start of line.
                 obs.gs_load_vertexbuffer(dot_vert)
-                obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
+                obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                 obs.gs_matrix_pop()
 
@@ -411,7 +381,7 @@ function draw_lines(data, lines)
                 obs.gs_matrix_translate3f(end_pos.x, end_pos.y, 0)
                 obs.gs_matrix_translate3f(-size, -size, 0)
                 obs.gs_load_vertexbuffer(dot_vert)
-                obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
+                obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                 obs.gs_matrix_pop()
             end
@@ -474,7 +444,7 @@ function draw_cursor(data, mouse_pos)
     
     -- Draw start of line.
     obs.gs_load_vertexbuffer(dot_vert)
-    obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
+    obs.gs_draw(obs.GS_TRIS, 0, 0)
 
     obs.gs_matrix_pop()
     obs.gs_matrix_pop()
@@ -552,42 +522,29 @@ function update_vertices()
     if dot_vert then
         obs.gs_vertexbuffer_destroy(dot_vert)
     end
-
-    local decision = 0
-    local xcoord = 0
-     -- set initial ycoord to radius of circle (user-defined 'size')
-    local ycoord = size
     
     obs.gs_render_start(true)
-    while ycoord >= xcoord do
-        -- shift the actual coordinates by the size of the circle,
-        -- so the entire circle has positive coordinates
-        local y_pos = ycoord + size
-        local y_neg = -ycoord + size
-        local x_pos = xcoord + size
-        local x_neg = -xcoord + size
-        -- create horizontal lines to fill the entire circle
-        obs.gs_vertex2f(x_pos, y_pos)
-        obs.gs_vertex2f(x_neg, y_pos)
-        obs.gs_vertex2f(x_pos, y_neg)
-        obs.gs_vertex2f(x_neg, y_neg)
-        obs.gs_vertex2f(y_pos, x_pos)
-        obs.gs_vertex2f(y_neg, x_pos)
-        obs.gs_vertex2f(y_pos, x_neg)
-        obs.gs_vertex2f(y_neg, x_neg)
-        
-        -- update coordinates and decision parameter
-        xcoord = xcoord + 1
-        if decision < 0 then
-            ycoord = ycoord
-            decision = decision + (2 * xcoord) + 1
-        else
-            ycoord = ycoord - 1
-            decision = decision + (2 * xcoord) + 1 - (2 * ycoord)
-        end
+
+    local sectors = 100
+    local angle_delta = (2 * math.pi) / sectors
+
+    local circum_points = {}
+    for i=0,(sectors-1) do
+        table.insert(circum_points, {
+            math.sin(angle_delta * i) * size,
+            math.cos(angle_delta * i) * size
+        })
+    end
+
+    for i=0,(sectors-1) do
+        local point_a = circum_points[i + 1]
+        local point_b = circum_points[((i + 1) % sectors) + 1]
+        obs.gs_vertex2f(0 + size, 0 + size)
+        obs.gs_vertex2f(point_a[1] + size, point_a[2] + size)
+        obs.gs_vertex2f(point_b[1] + size, point_b[2] + size)
     end
     
-    dot_vert = obs.gs_render_save()    
+    dot_vert = obs.gs_render_save()
     obs.obs_leave_graphics()
 end
 
@@ -616,14 +573,6 @@ function colorswap(pressed)
     end
 
     swap_color = true
-end
-
-function sizetoggle(pressed)
-    if not pressed or not is_drawable_window(winapi.GetForegroundWindow()) then
-        return
-    end
-
-    toggle_size = true
 end
 
 function erasertoggle(pressed)
@@ -756,7 +705,7 @@ function script_defaults(settings)
     obs.obs_data_set_default_bool(settings, "eraser", false)
     
     color_index = 1
-    size = 6
+    size = 20
     eraser = false
 end
 
