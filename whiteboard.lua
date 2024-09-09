@@ -358,6 +358,7 @@ function draw_lines(data, lines)
                 obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
 
                 obs.gs_matrix_push()
+                obs.gs_matrix_scale3f(size, size, 1.0)
                 
                 -- Draw start of line.
                 obs.gs_load_vertexbuffer(dot_vert)
@@ -378,6 +379,7 @@ function draw_lines(data, lines)
                 -- of the line (end cap).
                 obs.gs_matrix_identity()
                 obs.gs_matrix_translate3f(end_pos.x, end_pos.y, 0)
+                obs.gs_matrix_scale3f(size, size, 1.0)
                 obs.gs_load_vertexbuffer(dot_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
 
@@ -438,6 +440,7 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_translate3f(mouse_pos.x, mouse_pos.y, 0)
 
     obs.gs_matrix_push()
+    obs.gs_matrix_scale3f(size, size, 1.0)
     
     -- Draw start of line.
     obs.gs_load_vertexbuffer(dot_vert)
@@ -528,8 +531,8 @@ function update_vertices()
     local circum_points = {}
     for i=0,(sectors-1) do
         table.insert(circum_points, {
-            math.sin(angle_delta * i) * size,
-            math.cos(angle_delta * i) * size
+            math.sin(angle_delta * i),
+            math.cos(angle_delta * i)
         })
     end
 
