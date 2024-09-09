@@ -358,7 +358,6 @@ function draw_lines(data, lines)
                 obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
 
                 obs.gs_matrix_push()
-                obs.gs_matrix_translate3f(-size, -size, 0)
                 
                 -- Draw start of line.
                 obs.gs_load_vertexbuffer(dot_vert)
@@ -379,7 +378,6 @@ function draw_lines(data, lines)
                 -- of the line (end cap).
                 obs.gs_matrix_identity()
                 obs.gs_matrix_translate3f(end_pos.x, end_pos.y, 0)
-                obs.gs_matrix_translate3f(-size, -size, 0)
                 obs.gs_load_vertexbuffer(dot_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
 
@@ -440,7 +438,6 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_translate3f(mouse_pos.x, mouse_pos.y, 0)
 
     obs.gs_matrix_push()
-    obs.gs_matrix_translate3f(-size, -size, 0)
     
     -- Draw start of line.
     obs.gs_load_vertexbuffer(dot_vert)
@@ -539,9 +536,9 @@ function update_vertices()
     for i=0,(sectors-1) do
         local point_a = circum_points[i + 1]
         local point_b = circum_points[((i + 1) % sectors) + 1]
-        obs.gs_vertex2f(0 + size, 0 + size)
-        obs.gs_vertex2f(point_a[1] + size, point_a[2] + size)
-        obs.gs_vertex2f(point_b[1] + size, point_b[2] + size)
+        obs.gs_vertex2f(0, 0)
+        obs.gs_vertex2f(point_a[1], point_a[2])
+        obs.gs_vertex2f(point_b[1], point_b[2])
     end
     
     dot_vert = obs.gs_render_save()
