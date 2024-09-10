@@ -20,7 +20,8 @@ eraser_v4     = obs.vec4()
 color_index   = 1
 -- Preset colors: Yellow, Red, Green, Blue, White, Custom (format is 0xABGR)
 color_array = {0xff4d4de8, 0xff4d9de8, 0xff4de5e8, 0xff4de88e, 0xff95e84d, 0xffe8d34d, 0xffe8574d, 0xffe84d9d, 0xffbc4de8}
-size          = 20
+draw_size     = 6
+eraser_size   = 18
 size_max      = 12  -- size_max must be a minimum of 2.
 
 dot_vert = obs.gs_vertbuffer_t
@@ -199,15 +200,6 @@ source_def.video_tick = function(data, dt)
     obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
 
     obs.obs_leave_graphics()
-    
-    -- If the size of the pencil was changed, we need to update the
-    -- vertices used to draw our line.
-    if setting_update then
-        update_vertices()
-        setting_update = false
-    end
-
-    update_color()
 
     local mouse_down = winapi.GetAsyncKeyState(winapi.VK_LBUTTON)
     local window = winapi.GetForegroundWindow()
@@ -217,6 +209,11 @@ source_def.video_tick = function(data, dt)
         else
             target_window = nil
         end
+    end
+
+    if not drawing and window == target_window then
+        update_color()
+        update_size()
     end
 
     if mouse_down then
@@ -229,15 +226,23 @@ source_def.video_tick = function(data, dt)
                     return
                 end
 
-                local new_segment = { color = color_index, points = {
-                    { x = data.prev_mouse_pos.x, y = data.prev_mouse_pos.y },
-                    { x = mouse_pos.x, y = mouse_pos.y }
-                }}
+                local new_segment = {
+                    color = color_index,
+                    size = draw_size,
+                    points = {
+                        { x = data.prev_mouse_pos.x, y = data.prev_mouse_pos.y },
+                        { x = mouse_pos.x, y = mouse_pos.y }
+                    }
+                }
                 draw_lines(data, { new_segment })
                 table.insert(lines[#lines].points, { x = mouse_pos.x, y = mouse_pos.y })
             else
                 if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
-                    table.insert(lines, { color = color_index, points = {{ x = mouse_pos.x, y = mouse_pos.y }}})
+                    table.insert(lines, {
+                        color = color_index,
+                        size = draw_size,
+                        points = {{ x = mouse_pos.x, y = mouse_pos.y }}
+                    })
                     drawing = true
                 end
             end
@@ -267,6 +272,40 @@ function update_color()
         if key_down then
             color_index = i
         end
+    end
+end
+
+function update_size()
+    local size_changed = false
+
+    local plus_down = winapi.GetAsyncKeyState(winapi.VK_OEM_PLUS)
+    if plus_down then
+        if not plus_pressed and draw_size < 100 then
+            if color_index == 0 then
+                eraser_size = eraser_size + 4
+            else
+                draw_size = draw_size + 4
+            end
+            size_changed = true
+            plus_pressed = true
+        end
+    else
+        plus_pressed = false
+    end
+
+    local minus_down = winapi.GetAsyncKeyState(winapi.VK_OEM_MINUS)
+    if minus_down then
+        if not minus_pressed and draw_size > 3 then
+            if color_index == 0 then
+                eraser_size = eraser_size - 4
+            else
+                draw_size = draw_size - 4
+            end
+            size_changed = true
+            minus_pressed = true
+        end
+    else
+        minus_pressed = false
     end
 end
 
@@ -358,7 +397,7 @@ function draw_lines(data, lines)
                 obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
 
                 obs.gs_matrix_push()
-                obs.gs_matrix_scale3f(size, size, 1.0)
+                obs.gs_matrix_scale3f(line.size, line.size, 1.0)
                 
                 -- Draw start of line.
                 obs.gs_load_vertexbuffer(dot_vert)
@@ -368,8 +407,8 @@ function draw_lines(data, lines)
 
                 -- Perform matrix transformations for the actual line.
                 obs.gs_matrix_rotaa4f(0, 0, 1, angle)
-                obs.gs_matrix_translate3f(0, -size, 0)
-                obs.gs_matrix_scale3f(len / size, 1.0, 1.0)
+                obs.gs_matrix_translate3f(0, -line.size, 0)
+                obs.gs_matrix_scale3f(len, line.size, 1.0)
 
                 -- Draw actual line.
                 obs.gs_load_vertexbuffer(line_vert)
@@ -379,7 +418,7 @@ function draw_lines(data, lines)
                 -- of the line (end cap).
                 obs.gs_matrix_identity()
                 obs.gs_matrix_translate3f(end_pos.x, end_pos.y, 0)
-                obs.gs_matrix_scale3f(size, size, 1.0)
+                obs.gs_matrix_scale3f(line.size, line.size, 1.0)
                 obs.gs_load_vertexbuffer(dot_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
 
@@ -440,7 +479,7 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_translate3f(mouse_pos.x, mouse_pos.y, 0)
 
     obs.gs_matrix_push()
-    obs.gs_matrix_scale3f(size, size, 1.0)
+    obs.gs_matrix_scale3f(draw_size, draw_size, 1.0)
     
     -- Draw start of line.
     obs.gs_load_vertexbuffer(dot_vert)
@@ -499,20 +538,19 @@ function update_vertices()
     obs.obs_enter_graphics()
     
     -- LINE VERTICES
-    -- Create vertices for line of given width (user-defined 'size').
+    -- Create vertices for line of given width (user-defined 'draw_size').
     -- These vertices are for two triangles that make up each line.
     if line_vert then
         obs.gs_vertexbuffer_destroy(line_vert)
     end
 
     obs.gs_render_start(true)
-    local width = size * 2
     obs.gs_vertex2f(0, 0)
-    obs.gs_vertex2f(size, 0)
-    obs.gs_vertex2f(0, width)
-    obs.gs_vertex2f(0, width)
-    obs.gs_vertex2f(size, width)
-    obs.gs_vertex2f(size, 0)
+    obs.gs_vertex2f(1, 0)
+    obs.gs_vertex2f(0, 2)
+    obs.gs_vertex2f(0, 2)
+    obs.gs_vertex2f(1, 2)
+    obs.gs_vertex2f(1, 0)
     
     line_vert = obs.gs_render_save()
     
@@ -685,27 +723,19 @@ end
 
 function script_properties()
     local properties = obs.obs_properties_create()    
-    
-    local size_slider = obs.obs_properties_add_int_slider(properties, "size", "Size", 1, size_max, 1)
 
     local eraser_toggle = obs.obs_properties_add_bool(properties, "eraser", "Eraser")
     
     obs.obs_properties_add_button(properties, "clear", "Clear Whiteboard", clear_button)
     
-    -- obs.obs_data_set_int(settings, "color", 5)
-    -- obs.obs_data_set_int(settings, "size", 2)
-    
-    -- obs.obs_data_set_bool(settings, "eraser", false)
-    
     return properties
 end
 
 function script_defaults(settings)
-    obs.obs_data_set_default_int(settings, "size", 6)
     obs.obs_data_set_default_bool(settings, "eraser", false)
     
     color_index = 1
-    size = 20
+    draw_size = 6
     eraser = false
 end
 
@@ -715,7 +745,7 @@ function script_description()
     
 Add this source on top of your scene, then project your entire scene and draw on the projector window. Each scene can have one whiteboard.
     
-Hotkeys can be set to toggle color, size, and eraser. An additional hotkey can be set to wipe the canvas.
+Hotkeys can be set to toggle color, draw_size, and eraser. An additional hotkey can be set to wipe the canvas.
     
 The settings on this page will unfortunately not update in real-time when using hotkeys, due to limitations with OBS's script properties.]==]
 end
