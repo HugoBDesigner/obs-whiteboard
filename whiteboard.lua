@@ -24,6 +24,7 @@ draw_size     = 6
 eraser_size   = 18
 size_max      = 12  -- size_max must be a minimum of 2.
 
+eraser_vert = obs.gs_vertbuffer_t
 dot_vert = obs.gs_vertbuffer_t
 line_vert = obs.gs_vertbuffer_t
 
@@ -446,13 +447,13 @@ function draw_cursor(data, mouse_pos)
     local tech  = obs.gs_effect_get_technique(solid, "Solid")
 
     local size = draw_size
+    local color_v4 = obs.vec4()
 
     if color_index == 0 then
-        obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-        obs.gs_effect_set_vec4(color, eraser_v4)
+        obs.vec4_from_rgba(color_v4, 0xff000000)
+        obs.gs_effect_set_vec4(color, color_v4)
         size = eraser_size
     else
-        local color_v4 = obs.vec4()
         obs.vec4_from_rgba(color_v4, color_array[color_index])
         obs.gs_effect_set_vec4(color, color_v4)
     end
@@ -470,8 +471,13 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_scale3f(size, size, 1.0)
     
     -- Draw start of line.
-    obs.gs_load_vertexbuffer(dot_vert)
-    obs.gs_draw(obs.GS_TRIS, 0, 0)
+    if color_index == 0 then
+        obs.gs_load_vertexbuffer(eraser_vert)
+        obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
+    else
+        obs.gs_load_vertexbuffer(dot_vert)
+        obs.gs_draw(obs.GS_TRIS, 0, 0)
+    end
 
     obs.gs_matrix_pop()
     obs.gs_matrix_pop()
@@ -569,8 +575,29 @@ function update_vertices()
         obs.gs_vertex2f(point_a[1], point_a[2])
         obs.gs_vertex2f(point_b[1], point_b[2])
     end
-    
+
     dot_vert = obs.gs_render_save()
+
+    -- ERASER CURSOR VERTICES
+    -- Create vertices for a circle outline
+    -- which is shown as the cursor when using the eraser
+
+    if eraser_vert then
+        obs.gs_vertexbuffer_destroy(eraser_vert)
+    end
+    
+    obs.gs_render_start(true)
+
+    local circum_points = {}
+    for i=0,sectors do
+        obs.gs_vertex2f(
+            math.sin(angle_delta * i),
+            math.cos(angle_delta * i)
+        )
+    end
+
+    eraser_vert = obs.gs_render_save()
+    
     obs.obs_leave_graphics()
 end
 
