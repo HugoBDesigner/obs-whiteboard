@@ -1,5 +1,5 @@
 -- OBS Whiteboard Script
--- Authors: Mike Welsh (mwelsh@gmail.com), Tari
+-- Authors: Mike Welsh (mwelsh@gmail.com), Tari, Joseph Mansfield
 -- v1.3
 
 
