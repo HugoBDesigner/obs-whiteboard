@@ -90,14 +90,6 @@ function script_load(settings)
     obs.obs_hotkey_load(hotkey_clear, hotkey_save_array)
     obs.obs_data_array_release(hotkey_save_array)
     
-    hotkey_erase = obs.obs_hotkey_register_frontend("whiteboard.erasertoggle", "Toggle Whiteboard Eraser", erasertoggle)
-    if hotkey_erase == nil then
-        hotkey_erase = obs.OBS_INVALID_HOTKEY_ID
-    end
-    local hotkey_save_array4 = obs.obs_data_get_array(settings, "whiteboard.erasertoggle")
-    obs.obs_hotkey_load(hotkey_erase, hotkey_save_array4)
-    obs.obs_data_array_release(hotkey_save_array4)
-    
     hotkey_undo = obs.obs_hotkey_register_frontend("whiteboard.undo", "Undo Whiteboard", undo)
     if hotkey_undo == nil then
         hotkey_undo = obs.OBS_INVALID_HOTKEY_ID
@@ -108,19 +100,11 @@ function script_load(settings)
 end
 
 function script_update(settings)
-    local eraser_value = obs.obs_data_get_bool(settings, "eraser")
-    
     -- Set setting_update to true in order to trigger an update to the
     -- vertices used to draw our lines. This is deferred to the graphics
     -- loop (in source_def.video_tick()) to avoid potential race
     -- conditions.
     setting_update = true
-    
-    if eraser_value then
-        eraser = true
-    else
-        eraser = false
-    end
 end
 
 -- A function named script_save will be called when the script is saved
@@ -135,10 +119,6 @@ function script_save(settings)
     
     hotkey_save_array = obs.obs_hotkey_save(hotkey_size)
     obs.obs_data_set_array(settings, "whiteboard.sizetoggle", hotkey_save_array)
-    obs.obs_data_array_release(hotkey_save_array)
-    
-    hotkey_save_array = obs.obs_hotkey_save(hotkey_erase)
-    obs.obs_data_set_array(settings, "whiteboard.erasertoggle", hotkey_save_array)
     obs.obs_data_array_release(hotkey_save_array)
     
     hotkey_save_array = obs.obs_hotkey_save(hotkey_undo)
@@ -219,6 +199,11 @@ source_def.video_tick = function(data, dt)
     if mouse_down then
         if window and window == target_window then
             local mouse_pos = get_mouse_pos(data, window)
+
+            local size = draw_size
+            if color_index == 0 then
+                size = eraser_size
+            end
             
             if drawing then
                 effect = obs.obs_get_base_effect(obs.OBS_EFFECT_DEFAULT)
@@ -228,7 +213,7 @@ source_def.video_tick = function(data, dt)
 
                 local new_segment = {
                     color = color_index,
-                    size = draw_size,
+                    size = size,
                     points = {
                         { x = data.prev_mouse_pos.x, y = data.prev_mouse_pos.y },
                         { x = mouse_pos.x, y = mouse_pos.y }
@@ -240,7 +225,7 @@ source_def.video_tick = function(data, dt)
                 if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
                     table.insert(lines, {
                         color = color_index,
-                        size = draw_size,
+                        size = size,
                         points = {{ x = mouse_pos.x, y = mouse_pos.y }}
                     })
                     drawing = true
@@ -267,7 +252,7 @@ source_def.video_tick = function(data, dt)
 end
 
 function update_color()
-    for i=1,#color_array do
+    for i=0,#color_array do
         local key_down = winapi.GetAsyncKeyState(0x30 + i)
         if key_down then
             color_index = i
@@ -367,14 +352,14 @@ function draw_lines(data, lines)
             local color = obs.gs_effect_get_param_by_name(solid, "color")
             local tech  = obs.gs_effect_get_technique(solid, "Solid")
 
-            -- if line.erase then
-            --     obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-            --     obs.gs_effect_set_vec4(color, eraser_v4)
-            -- else
+            if line.color == 0 then
+                obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+                obs.gs_effect_set_vec4(color, eraser_v4)
+            else
                 local color_v4 = obs.vec4()
                 obs.vec4_from_rgba(color_v4, color_array[line.color])
                 obs.gs_effect_set_vec4(color, color_v4)
-            -- end
+            end
 
             obs.gs_technique_begin(tech)
             obs.gs_technique_begin_pass(tech, 0)
@@ -460,14 +445,17 @@ function draw_cursor(data, mouse_pos)
     local color = obs.gs_effect_get_param_by_name(solid, "color")
     local tech  = obs.gs_effect_get_technique(solid, "Solid")
 
-    -- if line.erase then
-    --     obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-    --     obs.gs_effect_set_vec4(color, eraser_v4)
-    -- else
-    local color_v4 = obs.vec4()
-    obs.vec4_from_rgba(color_v4, color_array[color_index])
-    obs.gs_effect_set_vec4(color, color_v4)
-    -- end
+    local size = draw_size
+
+    if color_index == 0 then
+        obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+        obs.gs_effect_set_vec4(color, eraser_v4)
+        size = eraser_size
+    else
+        local color_v4 = obs.vec4()
+        obs.vec4_from_rgba(color_v4, color_array[color_index])
+        obs.gs_effect_set_vec4(color, color_v4)
+    end
 
     obs.gs_technique_begin(tech)
     obs.gs_technique_begin_pass(tech, 0)
@@ -479,7 +467,7 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_translate3f(mouse_pos.x, mouse_pos.y, 0)
 
     obs.gs_matrix_push()
-    obs.gs_matrix_scale3f(draw_size, draw_size, 1.0)
+    obs.gs_matrix_scale3f(size, size, 1.0)
     
     -- Draw start of line.
     obs.gs_load_vertexbuffer(dot_vert)
