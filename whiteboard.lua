@@ -29,9 +29,14 @@ dot_vert = obs.gs_vertbuffer_t
 line_vert = obs.gs_vertbuffer_t
 
 drawing = false
+arrow_mode = false
 lines = {}
 
 target_window = nil
+
+plus_pressed = false
+minus_pressed = false
+a_pressed = false
 
 bit = require("bit")
 winapi = require("winapi")
@@ -157,7 +162,7 @@ source_def.video_tick = function(data, dt)
         obs.gs_set_render_target(data.canvas_texture, nil)
         obs.gs_clear(obs.GS_CLEAR_COLOR, obs.vec4(), 1.0, 0)
 
-        draw_lines(data, lines)
+        draw_lines(data, lines, true)
 
         obs.gs_viewport_pop()
         obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
@@ -195,6 +200,7 @@ source_def.video_tick = function(data, dt)
     if not drawing and window == target_window then
         update_color()
         update_size()
+        update_mode()
     end
 
     if mouse_down then
@@ -215,18 +221,20 @@ source_def.video_tick = function(data, dt)
                 local new_segment = {
                     color = color_index,
                     size = size,
+                    arrow = arrow_mode,
                     points = {
                         { x = data.prev_mouse_pos.x, y = data.prev_mouse_pos.y },
                         { x = mouse_pos.x, y = mouse_pos.y }
                     }
                 }
-                draw_lines(data, { new_segment })
+                draw_lines(data, { new_segment }, false)
                 table.insert(lines[#lines].points, { x = mouse_pos.x, y = mouse_pos.y })
             else
                 if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
                     table.insert(lines, {
                         color = color_index,
                         size = size,
+                        arrow = arrow_mode,
                         points = {{ x = mouse_pos.x, y = mouse_pos.y }}
                     })
                     drawing = true
@@ -246,6 +254,10 @@ source_def.video_tick = function(data, dt)
 
     if not mouse_down then
         if data.prev_mouse_pos then
+            if #lines >= 1 and arrow_mode and color_index ~= 0 then
+                draw_arrow_head(data, lines[#lines])
+            end
+
             data.prev_mouse_pos = nil
             drawing = false
         end
@@ -295,6 +307,18 @@ function update_size()
     end
 end
 
+function update_mode()
+    local key_down = winapi.GetAsyncKeyState(0x41)
+    if key_down then
+        if not a_pressed then
+            arrow_mode = not arrow_mode
+            a_pressed = true
+        end
+    else
+        a_pressed = false
+    end
+end
+
 function is_drawable_window(window)
     window_name = winapi.InternalGetWindowText(window, nil)
     if not window_name then
@@ -331,7 +355,7 @@ function get_mouse_pos(data, window)
     return mouse_pos
 end
 
-function draw_lines(data, lines)
+function draw_lines(data, lines, is_redraw)
     obs.obs_enter_graphics()
 
     local prev_render_target = obs.gs_get_render_target()
@@ -418,6 +442,126 @@ function draw_lines(data, lines)
             obs.gs_blend_state_pop()
         end
     end
+
+    obs.gs_projection_pop()
+    obs.gs_viewport_pop()
+    obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
+
+    obs.obs_leave_graphics()
+
+    if is_redraw then
+        for _, line in ipairs(lines) do
+            if line.arrow and line.color ~= 0 and #(line.points) > 1 then
+                draw_arrow_head(data, line)
+            end
+        end
+    end
+end
+
+function draw_arrow_head(data, line)
+    if #(line.points) < 2 then
+        return
+    end
+
+    obs.obs_enter_graphics()
+
+    local prev_render_target = obs.gs_get_render_target()
+    local prev_zstencil_target = obs.gs_get_zstencil_target()
+
+    obs.gs_set_render_target(data.canvas_texture, nil)
+    obs.gs_viewport_push()
+    obs.gs_set_viewport(0, 0, data.width, data.height)
+    obs.gs_projection_push()
+    obs.gs_ortho(0, data.width, 0, data.height, 0.0, 1.0)
+
+    obs.gs_blend_state_push()
+    obs.gs_reset_blend_state()
+    
+    -- Set the color being used (or set the eraser).
+    local solid = obs.obs_get_base_effect(obs.OBS_EFFECT_SOLID)
+    local color = obs.gs_effect_get_param_by_name(solid, "color")
+    local tech  = obs.gs_effect_get_technique(solid, "Solid")
+
+    if line.color == 0 then
+        obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+        obs.gs_effect_set_vec4(color, eraser_v4)
+    else
+        local color_v4 = obs.vec4()
+        obs.vec4_from_rgba(color_v4, color_array[line.color])
+        obs.gs_effect_set_vec4(color, color_v4)
+    end
+
+    obs.gs_technique_begin(tech)
+    obs.gs_technique_begin_pass(tech, 0)
+
+    local arrow_head_angle = math.pi / 4
+
+    local start_pos = line.points[#(line.points)]
+
+    local prev_pos = nil
+    local i = #(line.points) - 1
+    while i >= 1 do
+        prev_pos = line.points[i]
+        local dx = start_pos.x - prev_pos.x
+        local dy = start_pos.y - prev_pos.y
+        if (dx*dx + dy*dy) >= 80 then
+            break
+        end
+        i = i - 1
+    end
+
+    if prev_pos == nil then
+        return
+    end
+
+    local dx = start_pos.x - prev_pos.x
+    local dy = start_pos.y - prev_pos.y
+    local prev_segment_angle = math.atan2(dy, dx)
+
+    local len = 6 * line.size
+
+    local directions = {-1, 1}
+    for i=1,2 do
+        local direction = directions[i]
+
+        -- Calculate distance mouse has traveled since our
+        -- last update.
+        local angle = direction * (math.pi - arrow_head_angle) + prev_segment_angle
+
+        local arm_end_x = start_pos.x + (len * math.cos(angle))
+        local arm_end_y = start_pos.y + (len * math.sin(angle))
+        
+        -- Perform matrix transformations for the dot at the
+        -- start of the line (start cap).
+        obs.gs_matrix_push()
+        obs.gs_matrix_identity()
+        obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
+
+        -- Perform matrix transformations for the actual line.
+        obs.gs_matrix_rotaa4f(0, 0, 1, angle)
+        obs.gs_matrix_translate3f(0, -line.size, 0)
+        obs.gs_matrix_scale3f(len, line.size, 1.0)
+
+        -- Draw actual line.
+        obs.gs_load_vertexbuffer(line_vert)
+        obs.gs_draw(obs.GS_TRIS, 0, 0)
+
+        -- Perform matrix transforms for the dot at the end
+        -- of the line (end cap).
+        obs.gs_matrix_identity()
+        obs.gs_matrix_translate3f(arm_end_x, arm_end_y, 0)
+        obs.gs_matrix_scale3f(line.size, line.size, 1.0)
+        obs.gs_load_vertexbuffer(dot_vert)
+        obs.gs_draw(obs.GS_TRIS, 0, 0)
+
+        obs.gs_matrix_pop()
+    end
+
+    -- Done drawing line, restore everything.
+    obs.gs_technique_end_pass(tech)
+    obs.gs_technique_end(tech)
+
+    obs.gs_blend_state_pop()
 
     obs.gs_projection_pop()
     obs.gs_viewport_pop()
