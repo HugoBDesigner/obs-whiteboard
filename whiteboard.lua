@@ -859,11 +859,11 @@ source_def.video_render = function(data, effect)
 end
 
 source_def.get_width = function(data)
-    return 1920
+    return 0
 end
 
 source_def.get_height = function(data)
-    return 1080
+    return 0
 end
 
 -- When source is active, get the currently displayed scene's name and
