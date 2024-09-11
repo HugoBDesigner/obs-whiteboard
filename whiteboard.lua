@@ -27,6 +27,7 @@ size_max      = 12  -- size_max must be a minimum of 2.
 eraser_vert = obs.gs_vertbuffer_t
 dot_vert = obs.gs_vertbuffer_t
 line_vert = obs.gs_vertbuffer_t
+arrow_cursor_vert = obs.gs_vertbuffer_t
 
 drawing = false
 arrow_mode = false
@@ -500,9 +501,6 @@ function draw_arrow_head(data, texture, line)
         obs.gs_effect_set_vec4(color, color_v4)
     end
 
-    obs.gs_technique_begin(tech)
-    obs.gs_technique_begin_pass(tech, 0)
-
     local arrow_head_angle = math.pi / 4
 
     local start_pos = line.points[#(line.points)]
@@ -519,56 +517,58 @@ function draw_arrow_head(data, texture, line)
         i = i - 1
     end
 
-    if prev_pos == nil then
-        return
-    end
+    if prev_pos ~= nil and i ~= 0 then
+        obs.gs_technique_begin(tech)
+        obs.gs_technique_begin_pass(tech, 0)
 
-    local dx = start_pos.x - prev_pos.x
-    local dy = start_pos.y - prev_pos.y
-    local prev_segment_angle = math.atan2(dy, dx)
+        local dx = start_pos.x - prev_pos.x
+        local dy = start_pos.y - prev_pos.y
+        local prev_segment_angle = math.atan2(dy, dx)
 
-    local len = 6 * line.size
+        local len = 6 * line.size
 
-    local directions = {-1, 1}
-    for i=1,2 do
-        local direction = directions[i]
+        local directions = {-1, 1}
+        for i=1,2 do
+            local direction = directions[i]
 
-        -- Calculate distance mouse has traveled since our
-        -- last update.
-        local angle = direction * (math.pi - arrow_head_angle) + prev_segment_angle
+            -- Calculate distance mouse has traveled since our
+            -- last update.
+            local angle = direction * (math.pi - arrow_head_angle) + prev_segment_angle
 
-        local arm_end_x = start_pos.x + (len * math.cos(angle))
-        local arm_end_y = start_pos.y + (len * math.sin(angle))
-        
-        -- Perform matrix transformations for the dot at the
-        -- start of the line (start cap).
-        obs.gs_matrix_push()
-        obs.gs_matrix_identity()
-        obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
+            local arm_end_x = start_pos.x + (len * math.cos(angle))
+            local arm_end_y = start_pos.y + (len * math.sin(angle))
+            
+            -- Perform matrix transformations for the dot at the
+            -- start of the line (start cap).
+            obs.gs_matrix_push()
+            obs.gs_matrix_identity()
+            obs.gs_matrix_translate3f(start_pos.x, start_pos.y, 0)
 
-        -- Perform matrix transformations for the actual line.
-        obs.gs_matrix_rotaa4f(0, 0, 1, angle)
-        obs.gs_matrix_translate3f(0, -line.size, 0)
-        obs.gs_matrix_scale3f(len, line.size, 1.0)
+            -- Perform matrix transformations for the actual line.
+            obs.gs_matrix_rotaa4f(0, 0, 1, angle)
+            obs.gs_matrix_translate3f(0, -line.size, 0)
+            obs.gs_matrix_scale3f(len, line.size, 1.0)
 
-        -- Draw actual line.
-        obs.gs_load_vertexbuffer(line_vert)
-        obs.gs_draw(obs.GS_TRIS, 0, 0)
+            -- Draw actual line.
+            obs.gs_load_vertexbuffer(line_vert)
+            obs.gs_draw(obs.GS_TRIS, 0, 0)
 
-        -- Perform matrix transforms for the dot at the end
-        -- of the line (end cap).
-        obs.gs_matrix_identity()
-        obs.gs_matrix_translate3f(arm_end_x, arm_end_y, 0)
-        obs.gs_matrix_scale3f(line.size, line.size, 1.0)
-        obs.gs_load_vertexbuffer(dot_vert)
-        obs.gs_draw(obs.GS_TRIS, 0, 0)
+            -- Perform matrix transforms for the dot at the end
+            -- of the line (end cap).
+            obs.gs_matrix_identity()
+            obs.gs_matrix_translate3f(arm_end_x, arm_end_y, 0)
+            obs.gs_matrix_scale3f(line.size, line.size, 1.0)
+            obs.gs_load_vertexbuffer(dot_vert)
+            obs.gs_draw(obs.GS_TRIS, 0, 0)
 
-        obs.gs_matrix_pop()
+            obs.gs_matrix_pop()
+        end
+
+        obs.gs_technique_end_pass(tech)
+        obs.gs_technique_end(tech)
     end
 
     -- Done drawing line, restore everything.
-    obs.gs_technique_end_pass(tech)
-    obs.gs_technique_end(tech)
 
     obs.gs_blend_state_pop()
 
@@ -623,13 +623,20 @@ function draw_cursor(data, mouse_pos)
     obs.gs_matrix_push()
     obs.gs_matrix_scale3f(size, size, 1.0)
     
-    -- Draw start of line.
+    -- Draw cursor
     if color_index == 0 then
         obs.gs_load_vertexbuffer(eraser_vert)
         obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
     else
         obs.gs_load_vertexbuffer(dot_vert)
         obs.gs_draw(obs.GS_TRIS, 0, 0)
+
+        if arrow_mode then
+            obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
+            obs.gs_effect_set_vec4(color, eraser_v4)
+            obs.gs_load_vertexbuffer(arrow_cursor_vert)
+            obs.gs_draw(obs.GS_TRIS, 0, 0)
+        end
     end
 
     obs.gs_matrix_pop()
@@ -741,7 +748,6 @@ function update_vertices()
     
     obs.gs_render_start(true)
 
-    local circum_points = {}
     for i=0,sectors do
         obs.gs_vertex2f(
             math.sin(angle_delta * i),
@@ -750,6 +756,26 @@ function update_vertices()
     end
 
     eraser_vert = obs.gs_render_save()
+
+    -- ARROW CURSOR VERTICES
+    -- Create vertices for a triangle cursor
+    -- which is shown as the cursor when in arrow mode
+
+    if arrow_cursor_vert then
+        obs.gs_vertexbuffer_destroy(arrow_cursor_vert)
+    end
+    
+    obs.gs_render_start(true)
+
+    local angle_delta = (2 * math.pi) / 3
+    for i=0,3 do
+        obs.gs_vertex2f(
+            math.sin(angle_delta * (i + 0.5)) * 0.75,
+            math.cos(angle_delta * (i + 0.5)) * 0.75
+        )
+    end
+
+    arrow_cursor_vert = obs.gs_render_save()
     
     obs.obs_leave_graphics()
 end
