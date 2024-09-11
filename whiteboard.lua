@@ -4,17 +4,10 @@
 
 
 obs             = obslua
-hotkey_clear    = obs.OBS_INVALID_HOTKEY_ID
-hotkey_color    = obs.OBS_INVALID_HOTKEY_ID
-hotkey_size     = obs.OBS_INVALID_HOTKEY_ID
-hotkey_erase    = obs.OBS_INVALID_HOTKEY_ID
-hotkey_undo     = obs.OBS_INVALID_HOTKEY_ID
-needs_clear     = false
+needs_redraw     = false
 swap_color      = false
 toggle_size     = false
-eraser          = false
 scene_name      = nil
-setting_update  = false
 
 eraser_v4     = obs.vec4()
 color_index   = 1
@@ -38,6 +31,8 @@ target_window = nil
 plus_pressed = false
 minus_pressed = false
 a_pressed = false
+backspace_pressed = false
+c_pressed = false
 
 bit = require("bit")
 winapi = require("winapi")
@@ -89,29 +84,9 @@ end
 
 -- A function named script_load will be called on startup
 function script_load(settings)
-    hotkey_clear = obs.obs_hotkey_register_frontend("whiteboard.clear", "Clear Whiteboard", clear)
-    if hotkey_clear == nil then
-        hotkey_clear = obs.OBS_INVALID_HOTKEY_ID
-    end
-    local hotkey_save_array = obs.obs_data_get_array(settings, "whiteboard.clear")
-    obs.obs_hotkey_load(hotkey_clear, hotkey_save_array)
-    obs.obs_data_array_release(hotkey_save_array)
-    
-    hotkey_undo = obs.obs_hotkey_register_frontend("whiteboard.undo", "Undo Whiteboard", undo)
-    if hotkey_undo == nil then
-        hotkey_undo = obs.OBS_INVALID_HOTKEY_ID
-    end
-    local hotkey_save_array5 = obs.obs_data_get_array(settings, "whiteboard.undo")
-    obs.obs_hotkey_load(hotkey_undo, hotkey_save_array5)
-    obs.obs_data_array_release(hotkey_save_array5)
 end
 
 function script_update(settings)
-    -- Set setting_update to true in order to trigger an update to the
-    -- vertices used to draw our lines. This is deferred to the graphics
-    -- loop (in source_def.video_tick()) to avoid potential race
-    -- conditions.
-    setting_update = true
 end
 
 -- A function named script_save will be called when the script is saved
@@ -152,7 +127,7 @@ source_def.video_tick = function(data, dt)
         return
     end
 
-    if needs_clear then
+    if needs_redraw then
         local prev_render_target = obs.gs_get_render_target()
         local prev_zstencil_target = obs.gs_get_zstencil_target()
 
@@ -170,7 +145,7 @@ source_def.video_tick = function(data, dt)
 
         obs.obs_leave_graphics()
 
-        needs_clear = false
+        needs_redraw = false
     end
 
     local prev_render_target = obs.gs_get_render_target()
@@ -202,6 +177,8 @@ source_def.video_tick = function(data, dt)
         update_color()
         update_size()
         update_mode()
+        check_undo()
+        check_clear()
     end
 
     if mouse_down then
@@ -790,46 +767,33 @@ function valid_position(cur_x, cur_y, width, height)
     return false
 end
 
-function clear(pressed)
-    if not pressed or not is_drawable_window(winapi.GetForegroundWindow()) then
-        return
+function check_clear()
+    local key_down = winapi.GetAsyncKeyState(0x43)
+    if key_down then
+        if not c_pressed then
+            clear_table(lines)
+            needs_redraw = true
+            c_pressed = true
+        end
+    else
+        c_pressed = false
     end
-
-    clear_table(lines)
-    needs_clear = true
 end
 
-function colorswap(pressed)
-    if not pressed or not is_drawable_window(winapi.GetForegroundWindow()) then
-        return
+function check_undo()
+    local key_down = winapi.GetAsyncKeyState(0x08)
+    if key_down then
+        if not backspace_pressed then
+            if #lines > 0 then
+                table.remove(lines, #lines)
+            end
+
+            needs_redraw = true
+            backspace_pressed = true
+        end
+    else
+        backspace_pressed = false
     end
-
-    swap_color = true
-end
-
-function erasertoggle(pressed)
-    if not pressed or not is_drawable_window(winapi.GetForegroundWindow()) then
-        return
-    end
-
-    eraser = not eraser
-end
-
-function undo(pressed)
-    if not pressed or not is_drawable_window(winapi.GetForegroundWindow()) then
-        return
-    end
-
-    if #lines > 0 then
-        table.remove(lines, #lines)
-    end
-
-    needs_clear = true
-end
-
-function clear_button()
-    clear_table(lines)
-    needs_clear = true
 end
 
 function clear_table(tab)
@@ -916,21 +880,13 @@ source_def.deactivate = function(data)
 end
 
 function script_properties()
-    local properties = obs.obs_properties_create()    
-
-    local eraser_toggle = obs.obs_properties_add_bool(properties, "eraser", "Eraser")
-    
-    obs.obs_properties_add_button(properties, "clear", "Clear Whiteboard", clear_button)
-    
-    return properties
+    return obs.obs_properties_create()
 end
 
 function script_defaults(settings)
-    obs.obs_data_set_default_bool(settings, "eraser", false)
-    
     color_index = 1
     draw_size = 6
-    eraser = false
+    arrow_mode = false
 end
 
 function script_description()
@@ -939,9 +895,7 @@ function script_description()
     
 Add this source on top of your scene, then project your entire scene and draw on the projector window. Each scene can have one whiteboard.
     
-Hotkeys can be set to toggle color, draw_size, and eraser. An additional hotkey can be set to wipe the canvas.
-    
-The settings on this page will unfortunately not update in real-time when using hotkeys, due to limitations with OBS's script properties.]==]
+Hotkeys can be set to toggle color, draw_size, and eraser. An additional hotkey can be set to wipe the canvas.]==]
 end
 
 function dump(o)
