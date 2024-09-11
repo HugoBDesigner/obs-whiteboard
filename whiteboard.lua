@@ -227,8 +227,8 @@ source_def.video_tick = function(data, dt)
                         { x = mouse_pos.x, y = mouse_pos.y }
                     }
                 }
-                draw_lines(data, { new_segment }, false)
                 table.insert(lines[#lines].points, { x = mouse_pos.x, y = mouse_pos.y })
+                draw_lines(data, { new_segment }, false)
             else
                 if valid_position(mouse_pos.x, mouse_pos.y, data.width, data.height) then
                     table.insert(lines, {
@@ -255,7 +255,7 @@ source_def.video_tick = function(data, dt)
     if not mouse_down then
         if data.prev_mouse_pos then
             if #lines >= 1 and arrow_mode and color_index ~= 0 then
-                draw_arrow_head(data, lines[#lines])
+                draw_arrow_head(data, data.canvas_texture, lines[#lines])
             end
 
             data.prev_mouse_pos = nil
@@ -270,6 +270,11 @@ function update_color()
         if key_down then
             color_index = i
         end
+    end
+
+    local key_down = winapi.GetAsyncKeyState(0x45)
+    if key_down then
+        color_index = 0
     end
 end
 
@@ -355,7 +360,7 @@ function get_mouse_pos(data, window)
     return mouse_pos
 end
 
-function draw_lines(data, lines, is_redraw)
+function draw_lines(data, lines_to_draw, is_redraw)
     obs.obs_enter_graphics()
 
     local prev_render_target = obs.gs_get_render_target()
@@ -367,7 +372,7 @@ function draw_lines(data, lines, is_redraw)
     obs.gs_projection_push()
     obs.gs_ortho(0, data.width, 0, data.height, 0.0, 1.0)
 
-    for _, line in ipairs(lines) do
+    for _, line in ipairs(lines_to_draw) do
         if #(line.points) > 1 then
             obs.gs_blend_state_push()
             obs.gs_reset_blend_state()
@@ -450,15 +455,19 @@ function draw_lines(data, lines, is_redraw)
     obs.obs_leave_graphics()
 
     if is_redraw then
-        for _, line in ipairs(lines) do
+        for _, line in ipairs(lines_to_draw) do
             if line.arrow and line.color ~= 0 and #(line.points) > 1 then
-                draw_arrow_head(data, line)
+                draw_arrow_head(data, data.canvas_texture, line)
             end
+        end
+    else
+        if arrow_mode then
+            draw_arrow_head(data, data.ui_texture, lines[#lines])
         end
     end
 end
 
-function draw_arrow_head(data, line)
+function draw_arrow_head(data, texture, line)
     if #(line.points) < 2 then
         return
     end
@@ -468,7 +477,7 @@ function draw_arrow_head(data, line)
     local prev_render_target = obs.gs_get_render_target()
     local prev_zstencil_target = obs.gs_get_zstencil_target()
 
-    obs.gs_set_render_target(data.canvas_texture, nil)
+    obs.gs_set_render_target(texture, nil)
     obs.gs_viewport_push()
     obs.gs_set_viewport(0, 0, data.width, data.height)
     obs.gs_projection_push()
@@ -504,7 +513,7 @@ function draw_arrow_head(data, line)
         prev_pos = line.points[i]
         local dx = start_pos.x - prev_pos.x
         local dy = start_pos.y - prev_pos.y
-        if (dx*dx + dy*dy) >= 80 then
+        if (dx*dx + dy*dy) >= (line.size * line.size * line.size) then
             break
         end
         i = i - 1
