@@ -1,5 +1,5 @@
 local create_whiteboard = require('whiteboard').create_whiteboard
-local create_source_def = require('sourcedef').create_source_def
+local create_source = require('source').create_source
 
 -- A function named script_load will be called on startup
 function script_load(settings)
@@ -28,5 +28,5 @@ Hotkeys can be set to toggle color, draw_size, and eraser. An additional hotkey 
 end
 
 local whiteboard = create_whiteboard()
-local source_def = create_source_def(whiteboard)
-obs.obs_register_source(source_def)
+local source = create_source(whiteboard)
+obs.obs_register_source(source)
