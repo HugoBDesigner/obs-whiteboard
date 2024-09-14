@@ -3,17 +3,17 @@ local M = {}
 function M.create_renderer(source_data, whiteboard)
     local renderer = {}
 
-    renderer.canvas_texture = nil
-    renderer.ui_texture = nil
-
-    renderer.eraser_vert = obs.gs_vertbuffer_t
-    renderer.dot_vert = obs.gs_vertbuffer_t
-    renderer.line_vert = obs.gs_vertbuffer_t
-    renderer.arrow_cursor_vert = obs.gs_vertbuffer_t
-
-    renderer.eraser_v4 = obs.vec4()
-
     local graphics = {}
+
+    graphics.canvas_texture = nil
+    graphics.ui_texture = nil
+
+    graphics.eraser_vert = obs.gs_vertbuffer_t
+    graphics.dot_vert = obs.gs_vertbuffer_t
+    graphics.line_vert = obs.gs_vertbuffer_t
+    graphics.arrow_cursor_vert = obs.gs_vertbuffer_t
+
+    graphics.eraser_v4 = obs.vec4()
 
     graphics.draw_lines = function(lines)
         for _, line in ipairs(lines) do
@@ -28,7 +28,7 @@ function M.create_renderer(source_data, whiteboard)
 
                 if line.color == 0 then
                     obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-                    obs.gs_effect_set_vec4(color, renderer.eraser_v4)
+                    obs.gs_effect_set_vec4(color, graphics.eraser_v4)
                 else
                     local color_v4 = obs.vec4()
                     obs.vec4_from_rgba(color_v4, whiteboard.color_array[line.color])
@@ -59,7 +59,7 @@ function M.create_renderer(source_data, whiteboard)
                     obs.gs_matrix_scale3f(line.size, line.size, 1.0)
                     
                     -- Draw start of line.
-                    obs.gs_load_vertexbuffer(renderer.dot_vert)
+                    obs.gs_load_vertexbuffer(graphics.dot_vert)
                     obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                     obs.gs_matrix_pop()
@@ -70,7 +70,7 @@ function M.create_renderer(source_data, whiteboard)
                     obs.gs_matrix_scale3f(len, line.size, 1.0)
 
                     -- Draw actual line.
-                    obs.gs_load_vertexbuffer(renderer.line_vert)
+                    obs.gs_load_vertexbuffer(graphics.line_vert)
                     obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                     -- Perform matrix transforms for the dot at the end
@@ -78,7 +78,7 @@ function M.create_renderer(source_data, whiteboard)
                     obs.gs_matrix_identity()
                     obs.gs_matrix_translate3f(end_pos.x, end_pos.y, 0)
                     obs.gs_matrix_scale3f(line.size, line.size, 1.0)
-                    obs.gs_load_vertexbuffer(renderer.dot_vert)
+                    obs.gs_load_vertexbuffer(graphics.dot_vert)
                     obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                     obs.gs_matrix_pop()
@@ -108,7 +108,7 @@ function M.create_renderer(source_data, whiteboard)
 
         if line.color == 0 then
             obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-            obs.gs_effect_set_vec4(color, renderer.eraser_v4)
+            obs.gs_effect_set_vec4(color, graphics.eraser_v4)
         else
             local color_v4 = obs.vec4()
             obs.vec4_from_rgba(color_v4, whiteboard.color_array[line.color])
@@ -164,7 +164,7 @@ function M.create_renderer(source_data, whiteboard)
                 obs.gs_matrix_scale3f(len, line.size, 1.0)
 
                 -- Draw actual line.
-                obs.gs_load_vertexbuffer(renderer.line_vert)
+                obs.gs_load_vertexbuffer(graphics.line_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                 -- Perform matrix transforms for the dot at the end
@@ -172,7 +172,7 @@ function M.create_renderer(source_data, whiteboard)
                 obs.gs_matrix_identity()
                 obs.gs_matrix_translate3f(arm_end_x, arm_end_y, 0)
                 obs.gs_matrix_scale3f(line.size, line.size, 1.0)
-                obs.gs_load_vertexbuffer(renderer.dot_vert)
+                obs.gs_load_vertexbuffer(graphics.dot_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
 
                 obs.gs_matrix_pop()
@@ -222,16 +222,16 @@ function M.create_renderer(source_data, whiteboard)
         
         -- Draw cursor
         if whiteboard.color_index == 0 then
-            obs.gs_load_vertexbuffer(renderer.eraser_vert)
+            obs.gs_load_vertexbuffer(graphics.eraser_vert)
             obs.gs_draw(obs.GS_LINESTRIP, 0, 0)
         else
-            obs.gs_load_vertexbuffer(renderer.dot_vert)
+            obs.gs_load_vertexbuffer(graphics.dot_vert)
             obs.gs_draw(obs.GS_TRIS, 0, 0)
 
             if whiteboard.arrow_mode then
                 obs.gs_blend_function(obs.GS_BLEND_SRCALPHA, obs.GS_BLEND_SRCALPHA)
-                obs.gs_effect_set_vec4(color, renderer.eraser_v4)
-                obs.gs_load_vertexbuffer(renderer.arrow_cursor_vert)
+                obs.gs_effect_set_vec4(color, graphics.eraser_v4)
+                obs.gs_load_vertexbuffer(graphics.arrow_cursor_vert)
                 obs.gs_draw(obs.GS_TRIS, 0, 0)
             end
         end
@@ -247,21 +247,21 @@ function M.create_renderer(source_data, whiteboard)
     end
 
     graphics.recreate_textures = function(source_data)
-        if renderer.canvas_texture ~= nil then
-            obs.gs_texture_destroy(renderer.canvas_texture.render_target)
+        if graphics.canvas_texture ~= nil then
+            obs.gs_texture_destroy(graphics.canvas_texture.render_target)
         end
 
-        renderer.canvas_texture = {
+        graphics.canvas_texture = {
             width = source_data.width,
             height = source_data.height,
             render_target = obs.gs_texture_create(source_data.width, source_data.height, obs.GS_RGBA, 1, nil, obs.GS_RENDER_TARGET)
         }
         
-        if renderer.ui_texture ~= nil then
-            obs.gs_texture_destroy(renderer.ui_texture.render_target)
+        if graphics.ui_texture ~= nil then
+            obs.gs_texture_destroy(graphics.ui_texture.render_target)
         end
 
-        renderer.ui_texture = {
+        graphics.ui_texture = {
             width = source_data.width,
             height = source_data.height,
             render_target = obs.gs_texture_create(source_data.width, source_data.height, obs.GS_RGBA, 1, nil, obs.GS_RENDER_TARGET)
@@ -292,6 +292,8 @@ function M.create_renderer(source_data, whiteboard)
         obs.gs_set_render_target(prev_render_target, prev_zstencil_target)
     end
 
+    renderer.graphics = graphics
+
     renderer.enter_graphics = function(callback)
         obs.obs_enter_graphics()
         callback(graphics)
@@ -299,25 +301,25 @@ function M.create_renderer(source_data, whiteboard)
     end
 
     renderer.destroy = function()
-        renderer.enter_graphics(function()
-            obs.gs_texture_destroy(renderer.canvas_texture.render_target)
-            renderer.canvas_texture = nil
-            obs.gs_texture_destroy(renderer.ui_texture.render_target)
-            renderer.ui_texture = nil
+        renderer.enter_graphics(function(graphics)
+            obs.gs_texture_destroy(graphics.canvas_texture.render_target)
+            graphics.canvas_texture = nil
+            obs.gs_texture_destroy(graphics.ui_texture.render_target)
+            graphics.ui_texture = nil
         end)
     end
 
     renderer.ready = function()
-        return renderer.canvas_texture ~= nil and renderer.ui_texture ~= nil
+        return graphics.canvas_texture ~= nil and graphics.ui_texture ~= nil
     end
 
-    obs.vec4_from_rgba(renderer.eraser_v4, 0x00000000)
+    obs.vec4_from_rgba(graphics.eraser_v4, 0x00000000)
 
     renderer.enter_graphics(function(graphics)
-        renderer.line_vert = create_line_vertex_buffer()
-        renderer.dot_vert = create_dot_vertex_buffer()
-        renderer.eraser_vert = create_eraser_vertex_buffer()
-        renderer.arrow_cursor_vert = create_arrow_cursor_vertex_buffer()
+        graphics.line_vert = create_line_vertex_buffer()
+        graphics.dot_vert = create_dot_vertex_buffer()
+        graphics.eraser_vert = create_eraser_vertex_buffer()
+        graphics.arrow_cursor_vert = create_arrow_cursor_vertex_buffer()
 
         graphics.recreate_textures(source_data)
     end)

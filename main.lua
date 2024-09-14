@@ -1,7 +1,6 @@
 local create_whiteboard = require('whiteboard').create_whiteboard
 local create_source = require('source').create_source
 
--- A function named script_load will be called on startup
 function script_load(settings)
 end
 

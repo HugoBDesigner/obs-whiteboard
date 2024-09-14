@@ -206,6 +206,107 @@ function M.create_whiteboard()
         end
     end
 
+    whiteboard.update = function (source, graphics)
+        local mouse_down = winapi.GetAsyncKeyState(winapi.VK_LBUTTON)
+        local window = winapi.GetForegroundWindow()
+        if mouse_down then
+            if whiteboard.is_drawable_window(window) then
+                whiteboard.target_window = window
+            else
+                whiteboard.target_window = nil
+            end
+        end
+
+        if not whiteboard.drawing and window == whiteboard.target_window then
+            whiteboard.update_color()
+            whiteboard.update_size()
+            whiteboard.update_mode()
+            whiteboard.check_undo()
+            whiteboard.check_clear()
+        end
+
+        if mouse_down then
+            if window and window == whiteboard.target_window then
+                local mouse_pos = whiteboard.get_mouse_pos(source, window)
+
+                local size = whiteboard.draw_size
+                if whiteboard.color_index == 0 then
+                    size = whiteboard.eraser_size
+                end
+                
+                if whiteboard.color_index ~= 0 or #(whiteboard.lines) > 0 then
+                    if whiteboard.drawing then
+                        local effect = obs.obs_get_base_effect(obs.OBS_EFFECT_DEFAULT)
+                        if not effect then
+                            return
+                        end
+
+                        local new_segment = {
+                            color = whiteboard.color_index,
+                            size = size,
+                            arrow = whiteboard.arrow_mode,
+                            points = {
+                                { x = whiteboard.prev_mouse_pos.x, y = whiteboard.prev_mouse_pos.y },
+                                { x = mouse_pos.x, y = mouse_pos.y }
+                            }
+                        }
+
+                        local current_line = whiteboard.lines[#(whiteboard.lines)]
+
+                        table.insert(
+                            current_line.points,
+                            { x = mouse_pos.x, y = mouse_pos.y }
+                        )
+
+                        graphics.render_to_texture(graphics.canvas_texture, function()
+                            graphics.draw_lines({ new_segment })
+                        end)
+
+                        if whiteboard.arrow_mode then
+                            graphics.render_to_texture(graphics.ui_texture, function()
+                                graphics.draw_arrow_head(current_line)
+                            end)
+                        end
+                    else
+                        if whiteboard.valid_position(mouse_pos.x, mouse_pos.y, source.width, source.height) then
+                            table.insert(whiteboard.lines, {
+                                color = whiteboard.color_index,
+                                size = size,
+                                arrow = whiteboard.arrow_mode,
+                                points = {{ x = mouse_pos.x, y = mouse_pos.y }}
+                            })
+                            whiteboard.drawing = true
+                        end
+                    end
+                end
+
+                whiteboard.prev_mouse_pos = mouse_pos
+            end
+        end
+
+        if window and window == whiteboard.target_window then
+            local mouse_pos = whiteboard.get_mouse_pos(source, window)
+            if whiteboard.valid_position(mouse_pos.x, mouse_pos.y, source.width, source.height) then
+                graphics.render_to_texture(graphics.ui_texture, function()
+                    graphics.draw_cursor(mouse_pos)
+                end)
+            end
+        end
+
+        if not mouse_down then
+            if whiteboard.prev_mouse_pos then
+                if #(whiteboard.lines) >= 1 and whiteboard.arrow_mode and whiteboard.color_index ~= 0 then
+                    graphics.render_to_texture(graphics.canvas_texture, function()
+                        graphics.draw_arrow_head(whiteboard.lines[#(whiteboard.lines)])
+                    end)
+                end
+
+                whiteboard.prev_mouse_pos = nil
+                whiteboard.drawing = false
+            end
+        end
+    end
+
     return whiteboard
 end
 
