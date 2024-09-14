@@ -26,7 +26,7 @@ function M.create_whiteboard()
     --Color format is 0xABGR
     whiteboard.color_array = {0xff4d4de8, 0xff4d9de8, 0xff4de5e8, 0xff4de88e, 0xff95e84d, 0xffe8d34d, 0xffe8574d, 0xffe84d9d, 0xffbc4de8}
     whiteboard.draw_size = 6
-    whiteboard.eraser_size = 18
+    whiteboard.eraser_size = 26
     whiteboard.size_max = 12  -- size_max must be a minimum of 2.
 
     whiteboard.drawing = false
@@ -44,26 +44,29 @@ function M.create_whiteboard()
     whiteboard.prev_mouse_pos = nil
 
     whiteboard.update_color = function()
-        for i=0,#(whiteboard.color_array) do
+        for i=1,#(whiteboard.color_array) do
             local key_down = winapi.GetAsyncKeyState(0x30 + i)
             if key_down then
                 whiteboard.color_index = i
             end
         end
 
-        local key_down = winapi.GetAsyncKeyState(0x45)
+        local key_down = winapi.GetAsyncKeyState(0x45) or winapi.GetAsyncKeyState(0x30)
         if key_down then
             whiteboard.color_index = 0
+            whiteboard.eraser_size = whiteboard.draw_size + 20
         end
     end
 
     whiteboard.update_size = function ()
         local plus_down = winapi.GetAsyncKeyState(winapi.VK_OEM_PLUS)
         if plus_down then
-            if not whiteboard.plus_pressed and whiteboard.draw_size < 100 then
-                if whiteboard.color_index == 0 then
+            if not whiteboard.plus_pressed then
+                local eraser = whiteboard.color_index == 0
+
+                if eraser and whiteboard.eraser_size < 100 then
                     whiteboard.eraser_size = whiteboard.eraser_size + 4
-                else
+                elseif not eraser and whiteboard.draw_size < 100 then
                     whiteboard.draw_size = whiteboard.draw_size + 4
                 end
                 whiteboard.plus_pressed = true
@@ -74,10 +77,12 @@ function M.create_whiteboard()
 
         local minus_down = winapi.GetAsyncKeyState(winapi.VK_OEM_MINUS)
         if minus_down then
-            if not whiteboard.minus_pressed and whiteboard.draw_size > 3 then
-                if whiteboard.color_index == 0 then
+            if not whiteboard.minus_pressed then
+                local eraser = whiteboard.color_index == 0
+
+                if eraser and whiteboard.eraser_size > 3 then
                     whiteboard.eraser_size = whiteboard.eraser_size - 4
-                else
+                elseif not eraser and whiteboard.draw_size > 3 then
                     whiteboard.draw_size = whiteboard.draw_size - 4
                 end
                 whiteboard.minus_pressed = true
