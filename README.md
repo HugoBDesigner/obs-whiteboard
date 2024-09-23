@@ -2,6 +2,14 @@
 
 This script adds a whiteboard source type to OBS that allows users to annotate their stream/recording while live.
 
+Supports the following features:
+- Annotate your video while recording/streaming.
+- Change brush color and size, or use the eraser to remove brush strokes.
+- Switch to arrow mode to automatically add an arrow head to the end of your line.
+- Easily undo previously drawn lines or clear the whole whiteboard.
+
+![A screenshot of the OBS Whiteboard script being used in OBS. There are two desktop windows side by side. The window on the right is OBS Studio configured to show the whiteboard on top of the scene. The window on the left is a projector window, on which the word "Hello!", a smiley face, and some arrows have been drawn in various colours and sizes.](obs-whiteboard-screenshot.jpg?raw=true)
+
 This is a fork of [Mike Welsh](https://github.com/Herschel/)'s original script with some fixes and new features (drawing arrows, undo, and more).
 
 *Note*: Currently only supports Windows.
@@ -37,7 +45,7 @@ The following keys can be used while the projector window is focused:
 
 ## Authors
 
-- **mwelsh** *([TILT forums](http://tiltforums.com/u/mwelsh))*  *([GitHub](https://github.com/Herschel/obs-whiteboard))*  
+- **mwelsh** *([TILT forums](http://tiltforums.com/u/mwelsh))* *([GitHub](https://github.com/Herschel/obs-whiteboard))*  
 - **Tari**  
 - **Joseph Mansfield** *([GitHub](https://github.com/sftrabbit))* *([YouTube](https://youtube.com/@JoePlaysPuzzleGames))* *([josephmansfield.uk](https://josephmansfield.uk))*
 
