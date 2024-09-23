@@ -22,6 +22,7 @@ function M.create_whiteboard()
     whiteboard.toggle_size = false
     whiteboard.scene_name = nil
 
+    whiteboard.previous_color_index = 1
     whiteboard.color_index = 1
     --Color format is 0xABGR
     whiteboard.color_array = {0xff4d4de8, 0xff4d9de8, 0xff4de5e8, 0xff4de88e, 0xff95e84d, 0xffe8d34d, 0xffe8574d, 0xffe84d9d, 0xffbc4de8}
@@ -40,21 +41,40 @@ function M.create_whiteboard()
     whiteboard.a_pressed = false
     whiteboard.backspace_pressed = false
     whiteboard.c_pressed = false
+    whiteboard.e_pressed = false
 
     whiteboard.prev_mouse_pos = nil
 
     whiteboard.update_color = function()
         for i=1,#(whiteboard.color_array) do
             local key_down = winapi.GetAsyncKeyState(0x30 + i)
-            if key_down then
+            if key_down and whiteboard.color_index ~= i then
+                whiteboard.previous_color_index = whiteboard.color_index
                 whiteboard.color_index = i
             end
         end
 
-        local key_down = winapi.GetAsyncKeyState(0x45) or winapi.GetAsyncKeyState(0x30)
+        local key_down = winapi.GetAsyncKeyState(0x30)
         if key_down then
             whiteboard.color_index = 0
             whiteboard.eraser_size = whiteboard.draw_size + 20
+        end
+
+        local key_down = winapi.GetAsyncKeyState(0x45)
+        if key_down then
+            if not whiteboard.e_pressed then
+                if whiteboard.color_index == 0 then
+                    whiteboard.color_index = whiteboard.previous_color_index
+                else
+                    whiteboard.previous_color_index = whiteboard.color_index
+                    whiteboard.color_index = 0
+                    whiteboard.eraser_size = whiteboard.draw_size + 20
+                end
+
+                whiteboard.e_pressed = true
+            end
+        else
+            whiteboard.e_pressed = false
         end
     end
 
