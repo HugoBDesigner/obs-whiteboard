@@ -19,11 +19,18 @@ end
 
 function script_description()
     -- Using [==[ and ]==] as string delimiters, purely for IDE syntax parsing reasons.
-    return [==[Adds a whiteboard.
+    return [==[Adds a whiteboard source type which can be used to draw annotations on your scene while recording.
     
-Add this source on top of your scene, then project your entire scene and draw on the projector window. Each scene can have one whiteboard.
+Add a whiteboard source on top of your scene, then right click your scene and choose "Windowed Projector". You can then draw on that projector window.
     
-Hotkeys can be set to toggle color, draw_size, and eraser. An additional hotkey can be set to wipe the canvas.]==]
+The following keyboard shortcuts are available while the projector window is focused (these shortcuts cannot currently be modified):
+- 1-9: select brush color
+- 0: select eraser
+- +/-: increase or decrease the size of your brush/eraser
+- e: toggle between brush and eraser
+- a: toggle brush to or from arrow mode
+- backspace: undo previous change
+- c: clear whiteboard (this cannot be undone)]==]
 end
 
 local whiteboard = create_whiteboard()

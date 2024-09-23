@@ -1,35 +1,41 @@
-# Whiteboard Source for OBS Studio (Windows only)
-This script adds a new whiteboard source to OBS Studio that allows users to display live drawings on top of their sources.
+# Whiteboard Source for OBS
 
-Each scene can have its own whiteboard, though the pencil settings (color, size, etc.) are shared.
+This script adds a whiteboard source type to OBS that allows users to annotate their stream/recording while live.
 
-# How to Use
-0. Add the whiteboard script (whiteboard.lua) to OBS.
-1. Place a whiteboard source at the top of a scene. *(Note: you may have to toggle the visibility of the whiteboard on/off once to activate it)*
-2. Project your *scene* with either Windowed or Fullscreen Projector.
-3. Draw on your projected screen by left-clicking!
+This is a fork of [Mike Welsh](https://github.com/Herschel/)'s original script with some fixes and new features (drawing arrows, undo, and more).
 
-You can add hotkeys for the following actions in the OBS settings:
-- Cycle colors (Yellow, Red, Green, Blue, White, Custom)
-- Cycle sizes (this cycles through all the even pixel sizes, e.g. 2, 4, 6, etc.)
-- Toggle eraser on/off
-- Clear canvas
+*Note*: Currently only supports Windows.
 
-These settings are also exposed in the script properties, visible in OBS Studio's script menu when selecting the whiteboard plugin. Users can set more precise sizes and define the custom color, here.
+## How to Use
 
-# Known Issues
-- Script settings windows does not update when hotkeys are used.
-  * This is due to two limitations with the OBS script library:
-   1) There does not appear to be a *safe* way to access and update the settings object outside of particular functions. 
-   2) The script settings in the script window do not refresh themselves in the UI when changed (notably, per-source properties don't have this problem).
-   
+1. Download the latest version of this script and extract the zip file wherever you like.
+2. Go to Tools > Scripts in OBS, then click the + button at the bottom of your list of scripts.
+3. Select the `main.lua` file in the directory you extracted earlier to add it as a script.
+4. In the main OBS window, click the + button below your list of sources and then select "Whiteboard". *(Note: you may have to toggle the visibility of the whiteboard on/off once to activate it)*
+5. In the main OBS window, right click your scene and select "Windowed Projector".
+6. Draw on the projector window by left clicking
+
+The following keys can be used while the projector window is focused:
+- `1-9`: select brush color
+- `0`: select eraser
+- `+` or `-`: increase or decrease the size of your brush/eraser
+- `e`: toggle between brush and eraser
+- `a`: toggle brush to or from arrow mode
+- backspace: undo previous change
+- `c`: clear whiteboard (this cannot be undone)
+
+## Known issues
+
+- Keyboard shortcuts are currently not configurable.
+- The script can crash if reloaded while active. That is, by clicking the "refresh" button in the Tools > Scripts window.
+  * This is due to a bug in OBS that only occurs with scripts that define their own source types. In certain situations, a deadlock can occur between the UI thread and the rendering thread.
 - Whiteboard source doesn't accept inputs after being added to a scene, or after the script is refreshed.
   * This is because the source is only interactable when it's active. There's unfortunately no way to check whether a source is currently active, so we rely on the triggers on transition between active and deactive to determine when to enable interaction. Certain situations do not trigger this transition (e.g. adding a new source, refreshing the script, etc.), hence the source never knows it's active.
-  
-- Whiteboard source starts minimized sometimes.
-  * Some users have reported that newly added whiteboard sources show up minimized. Setting its size to 'Fit to Screen' seems to resolve this.
 
 
-# Authors
-**mwelsh** *([TILT forums](http://tiltforums.com/u/mwelsh))*  *([github](https://github.com/Herschel/obs-whiteboard))*  
-**Tari**
+## Authors
+
+- **mwelsh** *([TILT forums](http://tiltforums.com/u/mwelsh))*  *([GitHub](https://github.com/Herschel/obs-whiteboard))*  
+- **Tari**  
+- **Joseph Mansfield** *([GitHub](https://github.com/sftrabbit))* *([YouTube](https://youtube.com/@JoePlaysPuzzleGames))* *([josephmansfield.uk](https://josephmansfield.uk))*
+
