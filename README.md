@@ -10,7 +10,9 @@ Supports the following features:
 
 ![A screenshot of the OBS Whiteboard script being used in OBS. There are two desktop windows side by side. The window on the right is OBS Studio configured to show the whiteboard on top of the scene. The window on the left is a projector window, on which the word "Hello!", a smiley face, and some arrows have been drawn in various colours and sizes.](obs-whiteboard-screenshot.jpg?raw=true)
 
-This is a fork of [Mike Welsh](https://github.com/Herschel/)'s original script with some fixes and new features (drawing arrows, undo, and more).
+You can see an example of me using this script to annotate a puzzle game in [one of my YouTube videos](https://youtu.be/2E8IpCd0v9c?si=7hIhhYy6b2JsacVv&t=127).
+
+This is a fork of [Mike Welsh](https://github.com/Herschel/)'s original script.
 
 *Note*: Currently only supports Windows.
 
