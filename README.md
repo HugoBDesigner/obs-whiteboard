@@ -24,6 +24,8 @@ The following keys can be used while the projector window is focused:
 - backspace: undo previous change
 - `c`: clear whiteboard (this cannot be undone)
 
+*Note*: For convenience purposes, when switching to the eraser, the eraser size is automatically set to a size bigger than the current brush.
+
 ## Known issues
 
 - Keyboard shortcuts are currently not configurable.
