@@ -8,17 +8,17 @@ Supports the following features:
 - Switch to arrow mode to automatically add an arrow head to the end of your line.
 - Easily undo previously drawn lines or clear the whole whiteboard.
 
+*Note*: Currently only supports Windows.
+
 ![A screenshot of the OBS Whiteboard script being used in OBS. There are two desktop windows side by side. The window on the right is OBS Studio configured to show the whiteboard on top of the scene. The window on the left is a projector window, on which the word "Hello!", a smiley face, and some arrows have been drawn in various colours and sizes.](obs-whiteboard-screenshot.jpg?raw=true)
 
 You can see an example of me using this script to annotate a puzzle game in [one of my YouTube videos](https://youtu.be/2E8IpCd0v9c?si=7hIhhYy6b2JsacVv&t=127).
 
 This is a fork of [Mike Welsh](https://github.com/Herschel/)'s original script.
 
-*Note*: Currently only supports Windows.
+## How to use
 
-## How to Use
-
-1. Download the latest version of this script and extract the zip file wherever you like.
+1. Download [the latest version of this script](https://github.com/sftrabbit/obs-whiteboard/releases) and extract the zip file wherever you like.
 2. Go to Tools > Scripts in OBS, then click the + button at the bottom of your list of scripts.
 3. Select the `main.lua` file in the directory you extracted earlier to add it as a script.
 4. In the main OBS window, click the + button below your list of sources and then select "Whiteboard". *(Note: you may have to toggle the visibility of the whiteboard on/off once to activate it)*
