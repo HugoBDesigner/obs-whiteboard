@@ -265,7 +265,6 @@ function M.create_whiteboard()
                 end
                 
                 if whiteboard.color_index ~= 0 or #(whiteboard.lines) > 0 then
-					local linepoints = false
 					if (not whiteboard.drawing and shift_down and #whiteboard.lines > 0) then
 						-- Extend previous point
 						whiteboard.drawing = true
@@ -281,18 +280,14 @@ function M.create_whiteboard()
                             return
                         end
 						
-						if linepoints == false then
-							linepoints = {
-                                { x = whiteboard.prev_mouse_pos.x, y = whiteboard.prev_mouse_pos.y },
-                                { x = mouse_pos.x, y = mouse_pos.y }
-                            }
-						end
-
                         local new_segment = {
                             color = whiteboard.color_index,
                             size = size,
                             arrow = whiteboard.arrow_mode,
-                            points = linepoints
+                            points = {
+                                { x = whiteboard.prev_mouse_pos.x, y = whiteboard.prev_mouse_pos.y },
+                                { x = mouse_pos.x, y = mouse_pos.y }
+                            }
                         }
 
                         local current_line = whiteboard.lines[#(whiteboard.lines)]
